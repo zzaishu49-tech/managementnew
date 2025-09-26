@@ -1401,7 +1401,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             updated_at: new Date().toISOString() 
           })
           .eq('id', existingPage.id);
-        
+      }
           .select()
           .maybeSingle();
           throw error;
