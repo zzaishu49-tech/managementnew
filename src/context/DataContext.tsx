@@ -36,6 +36,7 @@ interface DataContextType {
   deleteTask: (taskId: string) => Promise<void>;
   createBrochureProject: (projectId: string, clientId: string, clientName: string) => Promise<BrochureProject | null>;
   updateBrochureProject: (id: string, updates: Partial<BrochureProject>) => void;
+  deleteBrochurePage: (projectId: string, pageNumber: number) => Promise<void>;
   saveBrochurePage: (pageData: { project_id: string; page_number: number; content: BrochurePage['content']; approval_status?: 'pending' | 'approved' | 'rejected'; is_locked?: boolean }) => Promise<void>;
   getBrochurePages: (projectId: string) => BrochurePage[];
   addPageComment: (comment: Omit<PageComment, 'id' | 'timestamp'>) => void;
@@ -1331,6 +1332,55 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteBrochurePage = async (projectId: string, pageNumber: number) => {
+    if (!supabase) {
+      // Local storage fallback
+      setBrochurePages(prev => prev.filter(p => !(p.project_id === projectId && p.page_number === pageNumber)));
+      return;
+    }
+
+    try {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('brochure_pages')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('page_number', pageNumber);
+
+      if (error) throw error;
+
+      // Update local state
+      setBrochurePages(prev => prev.filter(p => !(p.project_id === projectId && p.page_number === pageNumber)));
+
+      // Renumber remaining pages to fill gaps
+      const remainingPages = brochurePages
+        .filter(p => p.project_id === projectId && p.page_number > pageNumber)
+        .sort((a, b) => a.page_number - b.page_number);
+
+      // Update page numbers in database and local state
+      for (let i = 0; i < remainingPages.length; i++) {
+        const page = remainingPages[i];
+        const newPageNumber = pageNumber + i;
+        
+        if (page.page_number !== newPageNumber) {
+          // Update in database
+          await supabase
+            .from('brochure_pages')
+            .update({ page_number: newPageNumber })
+            .eq('id', page.id);
+
+          // Update in local state
+          setBrochurePages(prev => prev.map(p => 
+            p.id === page.id ? { ...p, page_number: newPageNumber } : p
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting brochure page:', error);
+      throw error;
+    }
+  };
+
   const saveBrochurePage = async (pageData: { project_id: string; page_number: number; content: BrochurePage['content']; approval_status?: 'pending' | 'approved' | 'rejected'; is_locked?: boolean }) => {
     if (supabase) {
       // Check if page exists
@@ -1655,6 +1705,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       deleteTask,
       createBrochureProject,
       updateBrochureProject,
+      deleteBrochurePage,
       saveBrochurePage,
       getBrochurePages,
       addPageComment,
@@ -1686,4 +1737,4 @@ export function useData() {
     throw new Error('useData must be used within a DataProvider');
   }
   return context;
-} 
+}

@@ -29,6 +29,8 @@ export function BrochureDesign({ initialBrochureProject, projectId, onBack }: Br
     projects,
     createBrochureProject, 
     updateBrochureProject,
+    deleteBrochureProject,
+    deleteBrochurePage,
     saveBrochurePage,
     getBrochurePages,
     lockBrochurePage,
@@ -237,11 +239,18 @@ export function BrochureDesign({ initialBrochureProject, projectId, onBack }: Br
     if (!currentProject || totalPages <= 1) return;
     
     if (confirm(`Are you sure you want to delete page ${currentPage}?`)) {
-      // In a real implementation, you would call a delete function
-      // For now, we'll just navigate to the previous page
-      const newCurrentPage = currentPage > 1 ? currentPage - 1 : 1;
-      setCurrentPage(newCurrentPage);
-      // TODO: Implement actual page deletion in the data context
+      deleteBrochurePage(currentProject.id, currentPage)
+        .then(() => {
+          // Navigate to previous page or stay on page 1
+          const newCurrentPage = currentPage > 1 ? currentPage - 1 : 1;
+          setCurrentPage(newCurrentPage);
+          // Clear current page data
+          setPageData({});
+        })
+        .catch((error) => {
+          console.error('Error deleting page:', error);
+          alert('Failed to delete page. Please try again.');
+        });
     }
   };
 
