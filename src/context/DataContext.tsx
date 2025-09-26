@@ -1389,7 +1389,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .select('id')
         .eq('project_id', pageData.project_id)
         .eq('page_number', pageData.page_number)
-        .single();
+        .maybeSingle();
 
       if (existingPage) {
         // Update existing page
@@ -1402,8 +1402,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           })
           .eq('id', existingPage.id);
         
-        if (error) {
-          console.error('Error updating brochure page:', error);
+          .select()
+          .maybeSingle();
           throw error;
         }
       } else {
@@ -1418,7 +1418,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             is_locked: pageData.is_locked || false
           });
         
-        if (error) {
+          .maybeSingle();
           console.error('Error creating brochure page:', error);
           throw error;
         }
