@@ -629,7 +629,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .select('*');
       
       if (!error && data) {
-      console.log('Raw tasks data from Supabase:', data);
+        console.log('Raw tasks data from Supabase:', data);
       
         const mappedTasks: Task[] = data.map((t: any) => ({
           id: t.id,
@@ -657,6 +657,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.log('Network error loading tasks, keeping existing state');
     }
   };
+
   useEffect(() => {
     refreshUsers();
     loadProjects();
@@ -759,7 +760,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       });
       setStages(prev => [...prev, ...newStages]);
     }
-  }, [projects]);
+  }, [projects, stages]);
 
   const downloadFile = async (fileId: string) => {
     const file = files.find(f => f.id === fileId);
@@ -1402,8 +1403,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           })
           .eq('id', existingPage.id);
       
-          .select()
-          .maybeSingle();
+        if (error) {
+          console.error('Error updating brochure page:', error);
           throw error;
         }
       } else {
@@ -1418,7 +1419,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             is_locked: pageData.is_locked || false
           });
         
-          .maybeSingle();
+        if (error) {
           console.error('Error creating brochure page:', error);
           throw error;
         }
