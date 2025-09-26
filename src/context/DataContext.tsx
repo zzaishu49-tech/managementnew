@@ -1457,7 +1457,7 @@ const saveBrochurePage = async (pageData: { project_id: string; page_number: num
       setBrochurePages(prev => [...prev, newPage]);
     }
   }
-};
+}; 
       // Reload pages to get updated data
       loadBrochurePages();
       return;
