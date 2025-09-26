@@ -8,8 +8,8 @@ import {
   Trash2, 
   Image as ImageIcon,
   FileText,
-  HelpCircle,
-  Loader2
+  Loader2,
+  Download
 } from 'lucide-react';
 
 interface BrochurePageEditorProps {
@@ -178,14 +178,15 @@ export function BrochurePageEditor({
     });
   };
 
-  const renderTooltip = (text: string) => (
-    <div className="group relative inline-block ml-2">
-      <HelpCircle className="w-4 h-4 text-gray-400 cursor-help" />
-      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-        {text}
-      </div>
-    </div>
-  );
+  const downloadImage = (imageUrl: string, index: number) => {
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = `image-${index + 1}`;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 ${!isEditable ? 'opacity-60 pointer-events-none' : ''}`} data-project-id={projectId}>
@@ -201,7 +202,6 @@ export function BrochurePageEditor({
           <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
             <FileText className="w-4 h-4 mr-2" />
             Text Content
-            {renderTooltip('Use the toolbar to format: bold, italic, bullets')}
           </label>
           <ReactQuill
             theme="snow"
@@ -221,17 +221,13 @@ export function BrochurePageEditor({
             formats={['bold', 'italic', 'list', 'bullet']}
             className="bg-white border border-gray-300 rounded-lg min-h-[160px]"
           />
-          <p className="text-xs text-gray-500 mt-1">
-            Supports bold, italic, and bullet lists. Select text and click toolbar.
-          </p>
         </div>
 
         {/* Images Section */}
         <div>
           <label className="text-sm font-medium text-gray-700 mb-2 flex items-center">
             <ImageIcon className="w-4 h-4 mr-2" />
-            Images (Optional)
-            {renderTooltip('Upload images to support your content (max 5MB each)')}
+            Images
           </label>
           
           {/* Existing Images */}
@@ -256,8 +252,14 @@ export function BrochurePageEditor({
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-900">Image {index + 1}</p>
-                    <p className="text-xs text-gray-500">Click to view full size</p>
                   </div>
+                  <button
+                    onClick={() => downloadImage(tempImages[index] || image, index)}
+                    className="text-blue-600 hover:text-blue-800 transition-colors p-1 mr-2"
+                    title="Download image"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
                   {isEditable && (
                     <button
                       onClick={() => removeImage(index)}
@@ -280,13 +282,11 @@ export function BrochurePageEditor({
                   <>
                     <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-2 animate-spin" />
                     <p className="text-blue-600 mb-1">Uploading image...</p>
-                    <p className="text-xs text-blue-500">Please wait</p>
                   </>
                 ) : (
                   <>
                     <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-gray-600 mb-1">Click to upload image</p>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 5MB</p>
                   </>
                 )}
                 <input
@@ -310,17 +310,6 @@ export function BrochurePageEditor({
               <p className="text-gray-500">No images uploaded</p>
             </div>
           )}
-        </div>
-
-        {/* Help Text */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-blue-900 mb-2">Page Guidelines:</h4>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Add your main content in the text area above</li>
-            <li>• Images are optional but can help illustrate your content</li>
-            <li>• Keep your content clear and concise</li>
-            <li>• Changes are saved automatically while you edit</li>
-          </ul>
         </div>
       </div>
     </div>

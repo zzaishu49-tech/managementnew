@@ -7,13 +7,13 @@ import { BrochurePageEditor } from './BrochurePageEditor';
 import { PageComments } from './PageComments';
 import { 
   Plus, 
-  Send, 
   Save, 
   ChevronLeft, 
   ChevronRight,
   FileText,
   CheckCircle,
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react';
 
 interface BrochureDesignProps {
@@ -232,6 +232,19 @@ export function BrochureDesign({ initialBrochureProject, projectId, onBack }: Br
         setSaveStatus('idle');
       });
   };
+
+  const handleDeletePage = () => {
+    if (!currentProject || totalPages <= 1) return;
+    
+    if (confirm(`Are you sure you want to delete page ${currentPage}?`)) {
+      // In a real implementation, you would call a delete function
+      // For now, we'll just navigate to the previous page
+      const newCurrentPage = currentPage > 1 ? currentPage - 1 : 1;
+      setCurrentPage(newCurrentPage);
+      // TODO: Implement actual page deletion in the data context
+    }
+  };
+
   const calculateProgress = () => {
     if (!currentProject) return 0;
     const pages = getBrochurePages(currentProject.id);
@@ -449,6 +462,15 @@ export function BrochureDesign({ initialBrochureProject, projectId, onBack }: Br
                 <span>Add Page</span>
               </button>
             )}
+            {canEdit && totalPages > 1 && (
+              <button
+                onClick={handleDeletePage}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Page</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -490,26 +512,6 @@ export function BrochureDesign({ initialBrochureProject, projectId, onBack }: Br
               </span>
             )}
           </div>
-          
-          {currentProject.status === 'draft' && canEdit && user?.role === 'client' && (
-            <button
-              onClick={handleSubmitProject}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-            >
-              <Send className="w-4 h-4" />
-              <span>Submit for Review</span>
-            </button>
-          )}
-          
-          {canEdit && (user?.role === 'manager' || user?.role === 'employee') && (
-            <button
-              onClick={handleSubmitProject}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-            >
-              <Send className="w-4 h-4" />
-              <span>Update Project Status</span>
-            </button>
-          )}
         </div>
       </div>
 
