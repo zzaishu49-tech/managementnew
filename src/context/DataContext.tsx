@@ -1461,7 +1461,7 @@ const saveBrochurePage = async (pageData: { project_id: string; page_number: num
       // Reload pages to get updated data
       loadBrochurePages();
       return;
-    } else {
+    else {
       // Fallback to local state
       const existingPageIndex = brochurePages.findIndex(
         page => page.project_id === pageData.project_id && page.page_number === pageData.page_number
