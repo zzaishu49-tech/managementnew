@@ -1381,87 +1381,58 @@ export function DataProvider({ children }: { children: ReactNode }) {
       throw error;
     }
   };
-const saveBrochurePage = async (pageData: { project_id: string; page_number: number; content: BrochurePage['content']; approval_status?: 'pending' | 'approved' | 'rejected'; is_locked?: boolean }) => {
-  if (supabase) {
-    try {
-      // Check if page exists
-      const { data: existingPage } = await supabase
-        .from('brochure_pages')
-        .select('id')
-        .eq('project_id', pageData.project_id)
-        .eq('page_number', pageData.page_number)
-        .maybeSingle();
 
-      if (existingPage) {
-        // Update existing page
-        const { error } = await supabase
+  const saveBrochurePage = async (pageData: { project_id: string; page_number: number; content: BrochurePage['content']; approval_status?: 'pending' | 'approved' | 'rejected'; is_locked?: boolean }) => {
+    if (supabase) {
+      try {
+        // Check if page exists
+        const { data: existingPage } = await supabase
           .from('brochure_pages')
-          .update({ 
-            content: pageData.content,
-            approval_status: pageData.approval_status || 'pending',
-            updated_at: new Date().toISOString() 
-          })
-          .eq('id', existingPage.id);
+          .select('id')
+          .eq('project_id', pageData.project_id)
+          .eq('page_number', pageData.page_number)
+          .maybeSingle();
 
-        if (error) {
-          console.error('Error updating brochure page:', error);
-          throw error;
-        }
-      } else {
-        // Create new page
-        const { error } = await supabase
-          .from('brochure_pages')
-          .insert({
-            project_id: pageData.project_id,
-            page_number: pageData.page_number,
-            content: pageData.content,
-            approval_status: pageData.approval_status || 'pending',
-            is_locked: pageData.is_locked || false
-          });
+        if (existingPage) {
+          // Update existing page
+          const { error } = await supabase
+            .from('brochure_pages')
+            .update({ 
+              content: pageData.content,
+              approval_status: pageData.approval_status || 'pending',
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', existingPage.id);
 
-        if (error) {
-          console.error('Error creating brochure page:', error);
-          throw error;
+          if (error) {
+            console.error('Error updating brochure page:', error);
+            throw error;
+          }
+        } else {
+          // Create new page
+          const { error } = await supabase
+            .from('brochure_pages')
+            .insert({
+              project_id: pageData.project_id,
+              page_number: pageData.page_number,
+              content: pageData.content,
+              approval_status: pageData.approval_status || 'pending',
+              is_locked: pageData.is_locked || false
+            });
+
+          if (error) {
+            console.error('Error creating brochure page:', error);
+            throw error;
+          }
         }
+
+        // Reload pages to get updated data
+        await loadBrochurePages();
+      } catch (error) {
+        console.error('Error in saveBrochurePage:', error);
+        throw error;
       }
-
-      // Reload pages to get updated data
-      await loadBrochurePages();
-    } catch (error) {
-      console.error('Error in saveBrochurePage:', error);
-      throw error;
-    }
-  } else {
-    // Fallback to local state
-    const existingPageIndex = brochurePages.findIndex(
-      page => page.project_id === pageData.project_id && page.page_number === pageData.page_number
-    );
-
-    if (existingPageIndex >= 0) {
-      // Update existing page
-      setBrochurePages(prev => prev.map((page, index) => 
-        index === existingPageIndex 
-          ? { ...page, content: pageData.content, updated_at: new Date().toISOString() }
-          : page
-      ));
     } else {
-      // Create new page
-      const newPage: BrochurePage = {
-        ...pageData,
-        approval_status: pageData.approval_status ?? 'pending',
-        is_locked: pageData.is_locked ?? false,
-        id: uuidv4(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      setBrochurePages(prev => [...prev, newPage]);
-    }
-  }
-}; 
-      // Reload pages to get updated data
-      loadBrochurePages();
-      return;
-    else {
       // Fallback to local state
       const existingPageIndex = brochurePages.findIndex(
         page => page.project_id === pageData.project_id && page.page_number === pageData.page_number
@@ -1486,7 +1457,6 @@ const saveBrochurePage = async (pageData: { project_id: string; page_number: num
         };
         setBrochurePages(prev => [...prev, newPage]);
       }
-      return Promise.resolve();
     }
   };
 
