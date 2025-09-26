@@ -1402,7 +1402,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           })
           .eq('id', existingPage.id);
       
-          select()
+          .select()
           .maybeSingle();
           throw error;
         }
