@@ -299,5 +299,63 @@ export function DataProvider({ children }: { children: ReactNode }) {
           .select('id')
       }
     }
-  }
+  };
+
+  return (
+    <DataContext.Provider value={{
+      projects,
+      stages,
+      commentTasks,
+      globalComments,
+      users,
+      files,
+      tasks,
+      meetings,
+      brochureProjects,
+      brochurePages,
+      pageComments,
+      leads,
+      downloadHistory,
+      createProject,
+      updateProject,
+      addCommentTask,
+      addGlobalComment,
+      updateCommentTaskStatus,
+      updateStageApproval,
+      uploadFile,
+      uploadFileFromInput,
+      uploadBrochureImage,
+      updateStageProgress,
+      scheduleMeeting,
+      createTask,
+      updateTaskStatus,
+      updateTask,
+      deleteTask,
+      createBrochureProject,
+      updateBrochureProject,
+      deleteBrochurePage,
+      saveBrochurePage,
+      getBrochurePages,
+      addPageComment,
+      getPageComments,
+      markCommentDone,
+      downloadFile,
+      downloadMultipleFiles,
+      getDownloadHistory,
+      updateFileMetadata,
+      createLead,
+      updateLead,
+      deleteLead,
+      approveBrochurePage,
+      getBrochureProjectsForReview,
+      lockBrochurePage,
+      unlockBrochurePage,
+      createUserAccount,
+      refreshUsers,
+      loadProjects,
+      deleteFile
+    }}>
+      {children}
+    </DataContext.Provider>
+  );
 }
