@@ -297,3 +297,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase
           .from('projects')
           .select('id')
+      }
+    }
+  }
+}
