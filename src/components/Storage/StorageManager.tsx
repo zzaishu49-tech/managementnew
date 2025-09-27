@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { Upload, Download, Search, Filter, FileText, Image, Video, Archive, Folder, Save, Trash2, AlertTriangle } from 'lucide-react';
+import { Upload, Download, Search, Filter, FileText, Image, Video, Archive, Folder } from 'lucide-react';
 
 interface StorageManagerProps {
   projectId?: string;
@@ -9,20 +9,10 @@ interface StorageManagerProps {
 
 export function StorageManager({ projectId }: StorageManagerProps) {
   const { user } = useAuth();
-  const { 
-    files, 
-    projects, 
-    stages, 
-    uploadFileFromInput,
-    deleteFile,
-    saveProjectFiles
-  } = useData();
+  const { files, projects, stages, uploadFileFromInput } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterUploader, setFilterUploader] = useState('all');
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const getFileIcon = (fileType: string) => {
     switch (fileType.toLowerCase()) {
@@ -55,39 +45,20 @@ export function StorageManager({ projectId }: StorageManagerProps) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Check if user has access to this project
-  const hasProjectAccess = (project: any) => {
-    if (!user || !project) return false;
-    
-    // Manager has access to all projects
-    if (user.role === 'manager') return true;
-    
-    // Client has access if they own the project
-    if (user.role === 'client' && project.client_id === user.id) return true;
-    
-    // Employee has access if assigned to the project
-    if (user.role === 'employee' && project.assigned_employees.includes(user.id)) return true;
-    
-    return false;
-  };
-
   const getProjectFiles = () => {
-    let filteredFiles = files;
-    
-    // Filter by project access
+    // If a projectId is provided, strictly scope to that project
     if (projectId) {
-      const project = projects.find(p => p.id === projectId);
-      if (!hasProjectAccess(project)) return [];
-      filteredFiles = files.filter(f => f.project_id === projectId);
-    } else {
-      // Filter files based on user role and project access
-      filteredFiles = files.filter(file => {
-        const project = projects.find(p => p.id === file.project_id);
-        return hasProjectAccess(project);
-      });
+      return files.filter(f => f.project_id === projectId);
     }
-    
-    return filteredFiles;
+    if (user?.role === 'employee') {
+      const assignedProjects = projects.filter(p => p.assigned_employees.includes(user.id));
+      return files.filter(f => assignedProjects.some(p => p.id === f.project_id));
+    }
+    if (user?.role === 'client') {
+      const clientProjects = projects.filter(p => p.client_id === user.id);
+      return files.filter(f => clientProjects.some(p => p.id === f.project_id));
+    }
+    return files;
   };
 
   const filteredFiles = getProjectFiles().filter(file => {
@@ -101,40 +72,17 @@ export function StorageManager({ projectId }: StorageManagerProps) {
   const uniqueUploaders = [...new Set(getProjectFiles().map(f => f.uploader_name))];
   const uniqueFileTypes = [...new Set(getProjectFiles().map(f => f.file_type))];
 
-  const handleFileUpload = (fileList: FileList | null) => {
+  const handleFileUpload = (fileList: FileList | null, targetProjectId: string) => {
     if (!fileList) return;
     
-    // Add files to pending list for batch save
-    setPendingFiles(prev => [...prev, ...Array.from(fileList)]);
-  };
-
-  const handleSaveFiles = async () => {
-    if (pendingFiles.length === 0 || !projectId) return;
-    
-    setIsSaving(true);
-    try {
-      await saveProjectFiles(projectId, pendingFiles, user?.name || 'Unknown');
-      setPendingFiles([]);
-    } catch (error) {
-      console.error('Error saving files:', error);
-      alert('Error saving files. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteFile = async (fileId: string) => {
-    try {
-      await deleteFile(fileId);
-      setDeleteConfirm(null);
-    } catch (error) {
-      console.error('Error deleting file:', error);
-      alert('Error deleting file. Please try again.');
-    }
-  };
-
-  const removePendingFile = (index: number) => {
-    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+    Array.from(fileList).forEach(file => {
+      // For storage manager, we'll use the first available stage of the project
+      const projectStages = stages.filter(s => s.project_id === targetProjectId);
+      const stageId = projectStages.length > 0 ? projectStages[0].id : '';
+      if (stageId) {
+        uploadFileFromInput(stageId, file, user?.name || 'Unknown');
+      }
+    });
   };
 
   const getFileLocation = (file: any) => {
@@ -146,24 +94,6 @@ export function StorageManager({ projectId }: StorageManagerProps) {
     return project?.title || 'Unknown Project';
   };
 
-  // Check if current user can manage files (upload/delete)
-  const canManageFiles = () => {
-    if (!user || !projectId) return false;
-    const project = projects.find(p => p.id === projectId);
-    if (!project) return false;
-    
-    // Manager can manage all files
-    if (user.role === 'manager') return true;
-    
-    // Client can manage files in their own project
-    if (user.role === 'client' && project.client_id === user.id) return true;
-    
-    // Employee can manage files in assigned projects
-    if (user.role === 'employee' && project.assigned_employees.includes(user.id)) return true;
-    
-    return false;
-  };
-
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -171,59 +101,19 @@ export function StorageManager({ projectId }: StorageManagerProps) {
           <h2 className="text-2xl font-bold text-gray-900">Shared Storage</h2>
           <p className="text-gray-600">All project files and documents in one place</p>
         </div>
-        <div className="flex items-center space-x-3">
-          {pendingFiles.length > 0 && (
-            <button
-              onClick={handleSaveFiles}
-              disabled={isSaving}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Saving...' : `Save ${pendingFiles.length} File(s)`}</span>
-            </button>
-          )}
-          {canManageFiles() && (
-            <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer flex items-center space-x-2">
-              <Upload className="w-4 h-4" />
-              <span>Upload Files</span>
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => handleFileUpload(e.target.files)}
-              />
-            </label>
-          )}
-        </div>
+        {user?.role !== 'client' && (
+          <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer flex items-center space-x-2">
+            <Upload className="w-4 h-4" />
+            <span>Upload Files</span>
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileUpload(e.target.files, projectId || projects[0]?.id || '')}
+            />
+          </label>
+        )}
       </div>
-
-      {/* Pending Files Section */}
-      {pendingFiles.length > 0 && (
-        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-yellow-800 mb-3">Pending Files ({pendingFiles.length})</h3>
-          <div className="space-y-2">
-            {pendingFiles.map((file, index) => (
-              <div key={index} className="flex items-center justify-between bg-white p-3 rounded border">
-                <div className="flex items-center space-x-3">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm font-medium">{file.name}</span>
-                  <span className="text-xs text-gray-500">({formatFileSize(file.size)})</span>
-                </div>
-                <button
-                  onClick={() => removePendingFile(index)}
-                  className="text-red-600 hover:text-red-800 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 text-sm text-yellow-700">
-            <AlertTriangle className="w-4 h-4 inline mr-1" />
-            Click "Save" to upload these files to the project storage.
-          </div>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -270,29 +160,18 @@ export function StorageManager({ projectId }: StorageManagerProps) {
                 {getFileIcon(file.file_type)}
                 <span className="font-medium text-gray-900 truncate">{file.filename}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = file.file_url;
-                    link.download = file.filename;
-                    link.click();
-                  }}
-                  className="text-blue-600 hover:text-blue-800 transition-colors"
-                  title="Download file"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                {canManageFiles() && (
-                  <button
-                    onClick={() => setDeleteConfirm(file.id)}
-                    className="text-red-600 hover:text-red-800 transition-colors"
-                    title="Delete file"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = file.file_url;
+                  link.download = file.filename;
+                  link.click();
+                }}
+                className="text-blue-600 hover:text-blue-800 transition-colors"
+                title="Download file"
+              >
+                <Download className="w-4 h-4" />
+              </button>
             </div>
 
             <div className="space-y-2 text-sm text-gray-600">
@@ -321,34 +200,6 @@ export function StorageManager({ projectId }: StorageManagerProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No files found</h3>
           <p className="text-gray-600">Try adjusting your search or filter criteria</p>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete File</h3>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to delete this file? This action cannot be undone.
-              </p>
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setDeleteConfirm(null)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteFile(deleteConfirm)}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </div>
