@@ -62,6 +62,9 @@ interface DataContextType {
 // Supabase client
 let supabase: SupabaseClient | null = externalSupabase;
 
+// Get Supabase URL for file URLs
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
 // Mock data (unchanged)
 const mockProjects: Project[] = [
   {
@@ -226,6 +229,203 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [downloadHistory, setDownloadHistory] = useState<DownloadHistory[]>([]);
   const [accessibleProjectIds, setAccessibleProjectIds] = useState<string[] | null>(null);
+
+  // Load projects from database
+  const loadProjects = async () => {
+    if (!supabase || !user) {
+      console.warn('Supabase or user not available - cannot load projects');
+      return;
+    }
+
+    try {
+      console.log('Loading projects for user:', user.id, 'Role:', user.role);
+      
+      let query = supabase.from('projects').select('*').order('created_at', { ascending: false });
+      
+      // Apply role-based filtering
+      if (user.role === 'client') {
+        query = query.eq('client_id', user.id);
+      } else if (user.role === 'employee') {
+        // For employees, we need to check assigned_employees array
+        query = query.contains('assigned_employees', [user.id]);
+      }
+      // Managers can see all projects (no additional filter)
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error loading projects:', error);
+        return;
+      }
+
+      if (data) {
+        const mappedProjects: Project[] = data.map(project => ({
+          id: project.id,
+          title: project.title,
+          description: project.description,
+          client_id: project.client_id,
+          client_name: project.client_name,
+          deadline: project.deadline,
+          progress_percentage: project.progress_percentage || 0,
+          assigned_employees: project.assigned_employees || [],
+          created_at: project.created_at,
+          status: project.status || 'active',
+          priority: project.priority || 'medium'
+        }));
+        
+        setProjects(mappedProjects);
+        console.log('Projects loaded successfully:', mappedProjects.length);
+      }
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    }
+  };
+
+  // Load users from database
+  const refreshUsers = async () => {
+    if (!supabase) {
+      console.warn('Supabase not configured - cannot load users');
+      return;
+    }
+
+    try {
+      console.log('Loading users from database');
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name', { ascending: true });
+
+      if (error) {
+        console.error('Error loading users:', error);
+        return;
+      }
+
+      if (data) {
+        const mappedUsers: User[] = data.map(profile => ({
+          id: profile.id,
+          name: profile.full_name || profile.email || 'Unknown User',
+          email: profile.email || '',
+          role: profile.role || 'employee'
+        }));
+        
+        setUsers(mappedUsers);
+        console.log('Users loaded successfully:', mappedUsers.length);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
+  // Create new project
+  const createProject = async (project: Omit<Project, 'id' | 'created_at'>) => {
+    if (!supabase || !user) {
+      console.warn('Supabase or user not available - cannot create project');
+      return;
+    }
+
+    try {
+      console.log('Creating new project:', project.title);
+      
+      const projectData = {
+        title: project.title,
+        description: project.description,
+        client_id: project.client_id,
+        client_name: project.client_name,
+        deadline: project.deadline,
+        progress_percentage: project.progress_percentage || 0,
+        assigned_employees: project.assigned_employees || [],
+        status: project.status || 'active',
+        priority: project.priority || 'medium'
+      };
+
+      const { data, error } = await supabase
+        .from('projects')
+        .insert(projectData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating project:', error);
+        throw error;
+      }
+
+      console.log('Project created successfully:', data.id);
+      
+      // Reload projects to update the UI
+      await loadProjects();
+      
+      // Create default stages for the new project
+      await createDefaultStages(data.id);
+      
+    } catch (error) {
+      console.error('Error creating project:', error);
+      throw error;
+    }
+  };
+
+  // Update existing project
+  const updateProject = async (id: string, updates: Partial<Project>, updatingUser?: User) => {
+    if (!supabase) {
+      console.warn('Supabase not configured - cannot update project');
+      return;
+    }
+
+    try {
+      console.log('Updating project:', id, updates);
+      
+      const { data, error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating project:', error);
+        throw error;
+      }
+
+      console.log('Project updated successfully:', data.id);
+      
+      // Reload projects to update the UI
+      await loadProjects();
+      
+    } catch (error) {
+      console.error('Error updating project:', error);
+      throw error;
+    }
+  };
+
+  // Create default stages for a new project
+  const createDefaultStages = async (projectId: string) => {
+    if (!supabase) return;
+
+    try {
+      console.log('Creating default stages for project:', projectId);
+      
+      const defaultStages = STAGE_NAMES.map((name, index) => ({
+        project_id: projectId,
+        name,
+        notes: `${name} stage for the project`,
+        progress_percentage: 0,
+        approval_status: 'pending' as const,
+        order: index
+      }));
+
+      const { error } = await supabase
+        .from('stages')
+        .insert(defaultStages);
+
+      if (error) {
+        console.error('Error creating default stages:', error);
+      } else {
+        console.log('Default stages created successfully');
+      }
+    } catch (error) {
+      console.error('Error creating default stages:', error);
+    }
+  };
 
   // Load files from database
   const loadFiles = async (projectId?: string) => {
@@ -422,120 +622,354 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   // Placeholder implementations for other context methods
-  const createProject = (project: Omit<Project, 'id' | 'created_at'>) => {
-    // Implementation (unchanged)
-  };
-  const updateProject = (id: string, updates: Partial<Project>) => {
-    // Implementation (unchanged)
-  };
   const addCommentTask = (data: Omit<CommentTask, 'id' | 'timestamp'>) => {
-    // Implementation (unchanged)
+    const newTask: CommentTask = {
+      ...data,
+      id: uuidv4(),
+      timestamp: new Date().toISOString()
+    };
+    setCommentTasks(prev => [...prev, newTask]);
   };
+  
   const addGlobalComment = (data: { project_id: string; text: string; added_by: string; author_role: string }) => {
-    // Implementation (unchanged)
+    const newComment: GlobalComment = {
+      id: uuidv4(),
+      project_id: data.project_id,
+      text: data.text,
+      added_by: data.added_by,
+      author_name: user?.name || 'Unknown',
+      author_role: data.author_role as 'manager' | 'employee' | 'client',
+      timestamp: new Date().toISOString()
+    };
+    setGlobalComments(prev => [...prev, newComment]);
   };
+  
   const updateCommentTaskStatus = (taskId: string, status: 'open' | 'in-progress' | 'done') => {
-    // Implementation (unchanged)
+    setCommentTasks(prev => 
+      prev.map(task => 
+        task.id === taskId ? { ...task, status } : task
+      )
+    );
   };
+  
   const updateStageApproval = (stageId: string, status: 'approved' | 'rejected', comment?: string) => {
-    // Implementation (unchanged)
+    setStages(prev => 
+      prev.map(stage => 
+        stage.id === stageId ? { ...stage, approval_status: status } : stage
+      )
+    );
   };
+  
   const uploadFile = (fileData: Omit<File, 'id' | 'timestamp'>) => {
-    // Implementation (unchanged)
+    const newFile: File = {
+      ...fileData,
+      id: uuidv4(),
+      timestamp: new Date().toISOString()
+    };
+    setFiles(prev => [...prev, newFile]);
   };
+  
   const uploadBrochureImage = async (file: globalThis.File, projectId: string) => {
-    // Implementation (unchanged)
-    return '';
+    if (!supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    try {
+      const fileName = `${Date.now()}-${file.name}`;
+      const storagePath = `brochures/${projectId}/${fileName}`;
+      
+      const { data, error } = await supabase.storage
+        .from('brochure-images')
+        .upload(storagePath, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('brochure-images')
+        .getPublicUrl(storagePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Error uploading brochure image:', error);
+      throw error;
+    }
   };
+  
   const updateStageProgress = (stageId: string, progress: number) => {
-    // Implementation (unchanged)
+    setStages(prev => 
+      prev.map(stage => 
+        stage.id === stageId ? { ...stage, progress_percentage: progress } : stage
+      )
+    );
   };
+  
   const scheduleMeeting = (meeting: Omit<Meeting, 'id'>) => {
-    // Implementation (unchanged)
+    const newMeeting: Meeting = {
+      ...meeting,
+      id: uuidv4()
+    };
+    setMeetings(prev => [...prev, newMeeting]);
   };
+  
   const createTask = (task: Omit<Task, 'id' | 'created_at'>) => {
-    // Implementation (unchanged)
+    const newTask: Task = {
+      ...task,
+      id: uuidv4(),
+      created_at: new Date().toISOString()
+    };
+    setTasks(prev => [...prev, newTask]);
   };
+  
   const updateTaskStatus = (taskId: string, status: 'open' | 'in-progress' | 'done') => {
-    // Implementation (unchanged)
+    setTasks(prev => 
+      prev.map(task => 
+        task.id === taskId ? { ...task, status } : task
+      )
+    );
   };
+  
   const updateTask = async (taskId: string, updates: Partial<Task>) => {
-    // Implementation (unchanged)
+    setTasks(prev => 
+      prev.map(task => 
+        task.id === taskId ? { ...task, ...updates } : task
+      )
+    );
   };
+  
   const deleteTask = async (taskId: string) => {
-    // Implementation (unchanged)
+    setTasks(prev => prev.filter(task => task.id !== taskId));
   };
+  
   const createBrochureProject = async (projectId: string, clientId: string, clientName: string) => {
-    // Implementation (unchanged)
-    return null;
+    const newBrochureProject: BrochureProject = {
+      id: uuidv4(),
+      client_id: clientId,
+      project_id: projectId,
+      client_name: clientName,
+      status: 'draft',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      pages: []
+    };
+    setBrochureProjects(prev => [...prev, newBrochureProject]);
+    return newBrochureProject;
   };
+  
   const updateBrochureProject = (id: string, updates: Partial<BrochureProject>) => {
-    // Implementation (unchanged)
+    setBrochureProjects(prev => 
+      prev.map(project => 
+        project.id === id ? { ...project, ...updates } : project
+      )
+    );
   };
+  
   const deleteBrochurePage = async (projectId: string, pageNumber: number) => {
-    // Implementation (unchanged)
+    setBrochurePages(prev => 
+      prev.filter(page => 
+        !(page.project_id === projectId && page.page_number === pageNumber)
+      )
+    );
   };
+  
   const saveBrochurePage = async (pageData: { project_id: string; page_number: number; content: BrochurePage['content']; approval_status?: 'pending' | 'approved' | 'rejected'; is_locked?: boolean }) => {
-    // Implementation (unchanged)
+    const existingPageIndex = brochurePages.findIndex(
+      page => page.project_id === pageData.project_id && page.page_number === pageData.page_number
+    );
+
+    if (existingPageIndex >= 0) {
+      setBrochurePages(prev => 
+        prev.map((page, index) => 
+          index === existingPageIndex 
+            ? { ...page, content: pageData.content, updated_at: new Date().toISOString() }
+            : page
+        )
+      );
+    } else {
+      const newPage: BrochurePage = {
+        id: uuidv4(),
+        project_id: pageData.project_id,
+        page_number: pageData.page_number,
+        approval_status: pageData.approval_status || 'pending',
+        is_locked: pageData.is_locked || false,
+        content: pageData.content,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      setBrochurePages(prev => [...prev, newPage]);
+    }
   };
+  
   const getBrochurePages = (projectId: string) => {
-    // Implementation (unchanged)
-    return [];
+    return brochurePages.filter(page => page.project_id === projectId);
   };
+  
   const addPageComment = (comment: Omit<PageComment, 'id' | 'timestamp'>) => {
-    // Implementation (unchanged)
+    const newComment: PageComment = {
+      ...comment,
+      id: uuidv4(),
+      timestamp: new Date().toISOString()
+    };
+    setPageComments(prev => [...prev, newComment]);
   };
+  
   const getPageComments = (pageId: string) => {
-    // Implementation (unchanged)
-    return [];
+    return pageComments.filter(comment => comment.page_id === pageId);
   };
+  
   const markCommentDone = (commentId: string) => {
-    // Implementation (unchanged)
+    setPageComments(prev => 
+      prev.map(comment => 
+        comment.id === commentId ? { ...comment, marked_done: true } : comment
+      )
+    );
   };
+  
   const downloadFile = (fileId: string) => {
-    // Implementation (unchanged)
+    const file = files.find(f => f.id === fileId);
+    if (file) {
+      const link = document.createElement('a');
+      link.href = file.file_url;
+      link.download = file.filename;
+      link.click();
+      
+      // Update download count
+      setFiles(prev => 
+        prev.map(f => 
+          f.id === fileId 
+            ? { ...f, download_count: f.download_count + 1, last_downloaded: new Date().toISOString() }
+            : f
+        )
+      );
+    }
   };
+  
   const downloadMultipleFiles = (fileIds: string[]) => {
-    // Implementation (unchanged)
+    fileIds.forEach(fileId => downloadFile(fileId));
   };
+  
   const getDownloadHistory = () => {
-    // Implementation (unchanged)
-    return [];
+    return downloadHistory;
   };
+  
   const updateFileMetadata = (fileId: string, metadata: Partial<File>) => {
-    // Implementation (unchanged)
+    setFiles(prev => 
+      prev.map(file => 
+        file.id === fileId ? { ...file, ...metadata } : file
+      )
+    );
   };
+  
   const createLead = (lead: Omit<Lead, 'id' | 'created_at' | 'updated_at'>) => {
-    // Implementation (unchanged)
+    const newLead: Lead = {
+      ...lead,
+      id: uuidv4(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    setLeads(prev => [...prev, newLead]);
   };
+  
   const updateLead = (id: string, updates: Partial<Lead>) => {
-    // Implementation (unchanged)
+    setLeads(prev => 
+      prev.map(lead => 
+        lead.id === id ? { ...lead, ...updates, updated_at: new Date().toISOString() } : lead
+      )
+    );
   };
+  
   const deleteLead = (id: string) => {
-    // Implementation (unchanged)
+    setLeads(prev => prev.filter(lead => lead.id !== id));
   };
+  
   const approveBrochurePage = (pageId: string, status: 'approved' | 'rejected', comment?: string) => {
-    // Implementation (unchanged)
+    setBrochurePages(prev => 
+      prev.map(page => 
+        page.id === pageId ? { ...page, approval_status: status } : page
+      )
+    );
   };
+  
   const getBrochureProjectsForReview = () => {
-    // Implementation (unchanged)
-    return [];
+    return brochureProjects.filter(project => 
+      project.status === 'ready_for_design' || project.status === 'in_design'
+    );
   };
+  
   const lockBrochurePage = (pageId: string) => {
-    // Implementation (unchanged)
+    setBrochurePages(prev => 
+      prev.map(page => 
+        page.id === pageId 
+          ? { 
+              ...page, 
+              is_locked: true, 
+              locked_by: user?.id,
+              locked_by_name: user?.name,
+              locked_at: new Date().toISOString()
+            } 
+          : page
+      )
+    );
   };
+  
   const unlockBrochurePage = (pageId: string) => {
-    // Implementation (unchanged)
+    setBrochurePages(prev => 
+      prev.map(page => 
+        page.id === pageId 
+          ? { 
+              ...page, 
+              is_locked: false, 
+              locked_by: undefined,
+              locked_by_name: undefined,
+              locked_at: undefined
+            } 
+          : page
+      )
+    );
   };
+  
   const createUserAccount = async (params: { email: string; password: string; full_name: string; role: 'employee' | 'client' }) => {
-    // Implementation (unchanged)
-    return null;
-  };
-  const refreshUsers = async () => {
-    // Implementation (unchanged)
-  };
-  const loadProjects = async () => {
-    // Implementation (unchanged)
+    if (!supabase) {
+      throw new Error('Supabase not configured');
+    }
+
+    try {
+      console.log('Creating user account:', params.email, params.role);
+      
+      const { data, error } = await supabase.auth.signUp({
+        email: params.email,
+        password: params.password,
+        options: {
+          data: {
+            full_name: params.full_name,
+            role: params.role
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        // Insert/Update profile
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            full_name: params.full_name,
+            role: params.role,
+            email: params.email
+          });
+
+        if (profileError) throw profileError;
+
+        console.log('User account created successfully:', data.user.id);
+        return { id: data.user.id };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error creating user account:', error);
+      throw error;
+    }
   };
 
   // Load accessible project IDs and files on mount or user change
@@ -543,9 +977,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (user) {
       fetchAccessibleProjectIds().then(ids => {
         setAccessibleProjectIds(ids);
-        if (ids) {
-          loadFiles(); // Load all accessible files initially
-        }
+        // Load all data when user is available
+        loadProjects();
+        refreshUsers();
+        loadFiles();
       }).catch(error => console.error('Error initializing data:', error));
     }
   }, [user]);
