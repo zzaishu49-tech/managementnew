@@ -56,6 +56,9 @@ interface DataContextType {
   createUserAccount: (params: { email: string; password: string; full_name: string; role: 'employee' | 'client' }) => Promise<{ id: string } | null>;
   refreshUsers: () => Promise<void>;
   loadProjects: () => Promise<void>;
+  saveProjectFiles: (projectId: string, fileList: globalThis.File[], uploaderName: string) => Promise<void>;
+  deleteFile: (fileId: string) => Promise<void>;
+  isUploading: boolean;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -225,6 +228,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [downloadHistory, setDownloadHistory] = useState<DownloadHistory[]>([]);
   const [accessibleProjectIds, setAccessibleProjectIds] = useState<string[] | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Compute project IDs the current user can access (role-based)
   const fetchAccessibleProjectIds = async (): Promise<string[] | null> => {
@@ -740,6 +744,129 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setStages(prev => [...prev, ...newStages]);
     }
   }, [projects]);
+
+  // Save multiple files to project storage
+  const saveProjectFiles = async (projectId: string, fileList: globalThis.File[], uploaderName: string) => {
+    if (!fileList.length) return;
+    
+    setIsUploading(true);
+    try {
+      if (supabase) {
+        // Upload files to Supabase storage and database
+        const uploadPromises = fileList.map(async (file) => {
+          // Upload to storage bucket
+          const fileName = `${projectId}/${Date.now()}-${file.name}`;
+          const { data: storageData, error: storageError } = await supabase.storage
+            .from('project-files')
+            .upload(fileName, file);
+
+          if (storageError) throw storageError;
+
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('project-files')
+            .getPublicUrl(fileName);
+
+          // Save file metadata to database
+          const fileData = {
+            project_id: projectId,
+            filename: file.name,
+            file_url: publicUrl,
+            storage_path: fileName,
+            uploaded_by: user?.id || '',
+            uploader_name: uploaderName,
+            size: file.size,
+            file_type: file.name.split('.').pop()?.toLowerCase() || 'unknown',
+            category: 'other',
+            download_count: 0,
+            is_archived: false,
+            timestamp: new Date().toISOString()
+          };
+
+          const { data, error } = await supabase
+            .from('files')
+            .insert([fileData])
+            .select()
+            .single();
+
+          if (error) throw error;
+          return data;
+        });
+
+        const uploadedFiles = await Promise.all(uploadPromises);
+        
+        // Update local state
+        setFiles(prev => [...prev, ...uploadedFiles]);
+        
+      } else {
+        // Fallback to local storage
+        const newFiles = fileList.map(file => ({
+          id: uuidv4(),
+          project_id: projectId,
+          filename: file.name,
+          file_url: URL.createObjectURL(file),
+          uploaded_by: user?.id || '',
+          uploader_name: uploaderName,
+          size: file.size,
+          file_type: file.name.split('.').pop()?.toLowerCase() || 'unknown',
+          category: 'other' as const,
+          download_count: 0,
+          is_archived: false,
+          timestamp: new Date().toISOString()
+        }));
+        
+        setFiles(prev => [...prev, ...newFiles]);
+        localStorage.setItem('xeetrack_files', JSON.stringify([...files, ...newFiles]));
+      }
+    } catch (error) {
+      console.error('Error saving files:', error);
+      throw error;
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Delete file from storage and database
+  const deleteFile = async (fileId: string) => {
+    try {
+      if (supabase) {
+        const fileToDelete = files.find(f => f.id === fileId);
+        if (!fileToDelete) throw new Error('File not found');
+
+        // Delete from storage if storage_path exists
+        if (fileToDelete.storage_path) {
+          const { error: storageError } = await supabase.storage
+            .from('project-files')
+            .remove([fileToDelete.storage_path]);
+          
+          if (storageError) {
+            console.warn('Error deleting from storage:', storageError);
+            // Continue with database deletion even if storage deletion fails
+          }
+        }
+
+        // Delete from database
+        const { error } = await supabase
+          .from('files')
+          .delete()
+          .eq('id', fileId);
+
+        if (error) throw error;
+        
+        // Update local state
+        setFiles(prev => prev.filter(f => f.id !== fileId));
+        
+      } else {
+        // Fallback to local storage
+        const updatedFiles = files.filter(f => f.id !== fileId);
+        setFiles(updatedFiles);
+        localStorage.setItem('xeetrack_files', JSON.stringify(updatedFiles));
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      throw error;
+    }
+  };
 
   const downloadFile = async (fileId: string) => {
     const file = files.find(f => f.id === fileId);
@@ -1654,6 +1781,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createUserAccount,
       refreshUsers,
       loadProjects,
+      saveProjectFiles,
+      deleteFile,
+      isUploading,
     }}>
       {children}
     </DataContext.Provider>
