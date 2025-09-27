@@ -235,6 +235,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      console.log('Loading files for project:', projectId || 'all');
       let query = supabase.from('files').select('*').order('timestamp', { ascending: false });
 
       // Filter by projectId if provided
@@ -281,8 +282,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Compute project IDs the current user can access (role-based)
   const fetchAccessibleProjectIds = async (): Promise<string[] | null> => {
-    if (!supabase || !user) return null;
+    if (!supabase || !user) {
+      console.warn('Supabase or user not available');
+      return null;
+    }
+
     try {
+      console.log('Fetching accessible project IDs for user:', user.id, 'Role:', user.role);
       if (user.role === 'client') {
         // Client can access only their projects
         const { data, error } = await supabase
@@ -322,10 +328,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching accessible project IDs:', error);
       return [];
     }
-    } catch (error) {
-      console.error('Error fetching accessible project IDs:', error);
-      return [];
-    }
   };
 
   // Upload file from input (modified for Storage Section)
@@ -344,6 +346,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       // Upload file to Supabase Storage
       const storagePath = `projects/${projectId}/${file.name}`;
+      console.log('Uploading file to storage:', storagePath);
       const { data: storageData, error: storageError } = await supabase.storage
         .from('files')
         .upload(storagePath, file, { upsert: true });
@@ -374,6 +377,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       // Reload files for the project
       await loadFiles(projectId);
+      console.log('File uploaded successfully:', file.name);
     } catch (error) {
       console.error('Error uploading file:', error);
       throw error;
@@ -395,6 +399,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
 
       // Delete from Supabase Storage
+      console.log('Deleting file from storage:', storagePath);
       const { error: storageError } = await supabase.storage
         .from('files')
         .remove([storagePath]);
@@ -409,6 +414,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       // Update local state
       setFiles(files.filter(f => f.id !== fileId));
+      console.log('File deleted successfully:', fileId);
     } catch (error) {
       console.error('Error deleting file:', error);
       throw error;
