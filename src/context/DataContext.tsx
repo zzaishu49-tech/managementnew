@@ -512,11 +512,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         }
         return (data || []).map((p: any) => p.project_id as string);
       } else if (user.role === 'manager') {
-        // Manager can access projects they manage
+        // Manager can access all projects
         const { data, error } = await supabase
           .from('projects')
-          .select('id')
-          .eq('manager_id', user.id);
+          .select('id');
         if (error) {
           console.error('Error fetching manager-accessible projects:', error);
           return [];
