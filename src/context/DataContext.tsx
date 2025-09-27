@@ -286,7 +286,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Load brochure projects from Supabase
   const loadBrochureProjects = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not initialized. Using fallback data.');
+      return;
+    }
     
     try {
       console.log('Loading brochure projects from Supabase...');
@@ -341,7 +344,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Load brochure pages from Supabase
   const loadBrochurePages = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not initialized. Using fallback data.');
+      return;
+    }
     
     try {
       console.log('Loading brochure pages from Supabase...');
@@ -386,7 +392,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Load page comments from Supabase
   const loadPageComments = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not initialized. Using fallback data.');
+      return;
+    }
     
     try {
       console.log('Loading page comments from Supabase...');
@@ -450,7 +459,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const loadGlobalComments = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not initialized. Using fallback data.');
+      return;
+    }
     
     try {
       console.log('Loading global comments from Supabase...');
@@ -566,7 +578,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const loadProjects = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not initialized. Using fallback data.');
+      return;
+    }
     
     try {
       console.log('Loading projects from Supabase...');
@@ -606,7 +621,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   const loadTasks = async () => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not initialized. Using fallback data.');
+      return;
+    }
     
     try {
       console.log('Loading tasks from Supabase...');
