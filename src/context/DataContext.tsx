@@ -208,6 +208,8 @@ const mockFiles: File[] = [
   }
 ];
 
+const DataContext = createContext<DataContextType | undefined>(undefined);
+
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>(mockProjects);
@@ -316,6 +318,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return (data || []).map((p: any) => p.id as string);
       }
       return [];
+    } catch (error) {
+      console.error('Error fetching accessible project IDs:', error);
+      return [];
+    }
     } catch (error) {
       console.error('Error fetching accessible project IDs:', error);
       return [];
