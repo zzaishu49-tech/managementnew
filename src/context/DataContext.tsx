@@ -296,4 +296,4 @@ export function DataProvider({ children }: { children: ReactNode }) {
         // Employee can access projects where they are assigned
         const { data, error } = await supabase
           .from('projects')
-          .select('
+          .select('id')
